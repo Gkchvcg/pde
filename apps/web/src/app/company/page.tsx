@@ -8,6 +8,9 @@ import { formatUnits, isHex, parseAbiItem, parseUnits } from "viem";
 import { ArrowLeft, Building2, ShoppingCart, Shield, RefreshCcw, Eye } from "lucide-react";
 import { dataMarketplaceAbi } from "@/lib/contracts";
 import { ERC20_ABI } from "@/lib/erc20";
+import { useApiAuth } from "@/lib/useApiAuth";
+import { withAuthHeaders } from "@/lib/apiAuth";
+import { useToast } from "@/app/toast";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -46,6 +49,8 @@ function statusLabel(s: number) {
 export default function CompanyPage() {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
+  const { token, ensureAuth } = useApiAuth();
+  const toast = useToast();
 
   const [marketplaceAddress, setMarketplaceAddress] = useState<string>("");
   const [tokenAddress, setTokenAddress] = useState<string>("");
@@ -295,6 +300,7 @@ export default function CompanyPage() {
       args: [marketplaceAddress as `0x${string}`, BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")],
     });
     void refetchAllowance();
+    toast.push({ kind: "info", title: "Approval sent", message: "Confirm the token approval in your wallet." });
   };
 
   const createRequest = () => {
@@ -318,14 +324,18 @@ export default function CompanyPage() {
       args: [selectedPermission.user, selectedPermission.category, neededAmount],
     });
     void refreshMyRequests();
+    toast.push({ kind: "info", title: "Request sent", message: "Your on-chain request is pending confirmation." });
   };
 
   const openInsight = async (cid: string) => {
     setViewer(null);
     setLoadingViewer(true);
+    const t = token ?? (await ensureAuth());
     try {
       // Try insights endpoint first (structured anonymized data).
-      const res = await fetch(`${API}/api/insights/${encodeURIComponent(cid)}`);
+      const res = await fetch(`${API}/api/insights/${encodeURIComponent(cid)}`, {
+        headers: withAuthHeaders(t),
+      });
       if (res.ok) {
         const data = await res.json();
         setViewer({ cid, kind: "insight", content: data });
@@ -335,7 +345,9 @@ export default function CompanyPage() {
 
     try {
       // Fallback to media.
-      const res2 = await fetch(`${API}/api/data/media/${encodeURIComponent(cid)}`);
+      const res2 = await fetch(`${API}/api/data/media/${encodeURIComponent(cid)}`, {
+        headers: withAuthHeaders(t),
+      });
       const data2 = await res2.json();
       if (data2?.base64 && data2?.mime) {
         setViewer({ cid, kind: "media", mime: data2.mime, content: data2.base64 });
@@ -345,6 +357,7 @@ export default function CompanyPage() {
 
     setViewer({ cid, kind: "insight", content: { error: "Unable to load this CID from API." } });
     setLoadingViewer(false);
+    toast.push({ kind: "error", title: "Unable to load", message: "You can only view fulfilled insights you purchased." });
   };
 
   useEffect(() => {

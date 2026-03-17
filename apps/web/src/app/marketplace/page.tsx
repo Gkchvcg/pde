@@ -7,6 +7,9 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { ArrowLeft, Store, DollarSign, CreditCard, RefreshCcw } from "lucide-react";
 import { formatUnits, isHex, parseAbiItem, parseUnits } from "viem";
 import { DATA_MARKETPLACE_ADDRESS, dataMarketplaceAbi } from "@/lib/contracts";
+import { useApiAuth } from "@/lib/useApiAuth";
+import { withAuthHeaders } from "@/lib/apiAuth";
+import { useToast } from "@/app/toast";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 const MARKETPLACE_LS_KEY = "pde-marketplace-address";
@@ -31,6 +34,8 @@ function shortenHex(value: string, length = 6) {
 export default function MarketplacePage() {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
+  const { token, ensureAuth } = useApiAuth();
+  const toast = useToast();
 
   const [marketplaceAddress, setMarketplaceAddress] = useState<string>(DATA_MARKETPLACE_ADDRESS);
 
@@ -109,9 +114,11 @@ export default function MarketplacePage() {
 
   const refreshVault = async () => {
     if (!address) return;
+    const t = token ?? (await ensureAuth());
+    if (!t) return;
     setLoadingVault(true);
     try {
-      const res = await fetch(`${API}/api/data/vault/${address}`);
+      const res = await fetch(`${API}/api/data/vault/${address}`, { headers: withAuthHeaders(t) });
       const data = await res.json();
       if (Array.isArray(data)) setVaultItems(data.reverse());
     } catch (e) {
@@ -246,8 +253,10 @@ export default function MarketplacePage() {
         functionName: "approveRequest",
         args: [id],
       });
+      toast.push({ kind: "info", title: "Approval sent", message: "Confirm the transaction in your wallet." });
     } catch (err: any) {
       setLocalError(err.message ?? "Failed to approve request.");
+      toast.push({ kind: "error", title: "Approval failed", message: err.message ?? "Transaction failed" });
     }
   };
 
@@ -267,8 +276,10 @@ export default function MarketplacePage() {
         args: [],
       });
       void refetchEarnings();
+      toast.push({ kind: "info", title: "Withdraw sent", message: "Confirm the transaction in your wallet." });
     } catch (err: any) {
       setLocalError(err.message ?? "Failed to withdraw earnings.");
+      toast.push({ kind: "error", title: "Withdraw failed", message: err.message ?? "Transaction failed" });
     }
   };
 
@@ -296,8 +307,10 @@ export default function MarketplacePage() {
         functionName: "fulfillRequest",
         args: [id, fulfillCid],
       });
+      toast.push({ kind: "info", title: "Fulfillment sent", message: "Confirm the transaction in your wallet." });
     } catch (err: any) {
       setLocalError(err.message ?? "Failed to fulfill request.");
+      toast.push({ kind: "error", title: "Fulfillment failed", message: err.message ?? "Transaction failed" });
     }
   };
 

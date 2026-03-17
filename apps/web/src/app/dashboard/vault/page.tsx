@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import Link from "next/link";
 import { ArrowLeft, Upload, FileJson, FolderUp, X, Image as ImageIcon, Video } from "lucide-react";
+import { useApiAuth } from "@/lib/useApiAuth";
+import { withAuthHeaders } from "@/lib/apiAuth";
+import { useToast } from "@/app/toast";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 const CATEGORIES = ["HEALTH", "SHOPPING", "FITNESS", "LOCATION", "SOCIAL"];
@@ -25,6 +28,8 @@ function parseCSV(text: string): { rows: Record<string, string>[] } {
 
 export default function VaultPage() {
   const { address, isConnected } = useAccount();
+  const { token, ensureAuth, authenticating, authError } = useApiAuth();
+  const toast = useToast();
   const [category, setCategory] = useState("FITNESS");
   const [payload, setPayload] = useState('{"activityLevel":"moderate","weeklySessions":3}');
   const [uploaded, setUploaded] = useState<any[]>([]);
@@ -50,9 +55,13 @@ export default function VaultPage() {
 
   async function refreshVault() {
     if (!address) return;
+    const t = token ?? (await ensureAuth());
+    if (!t) return;
     setLoadingVault(true);
     try {
-      const res = await fetch(`${API}/api/data/vault/${address}`);
+      const res = await fetch(`${API}/api/data/vault/${address}`, {
+        headers: withAuthHeaders(t),
+      });
       const data = await res.json();
       if (Array.isArray(data)) setUploaded(data.reverse());
     } catch (e) {
@@ -104,25 +113,34 @@ export default function VaultPage() {
 
   async function handleUpload() {
     if (!address) return;
+    const t = token ?? (await ensureAuth());
+    if (!t) return;
     setLoading(true);
     try {
       const payloadObj = JSON.parse(payload);
       const res = await fetch(`${API}/api/data/upload`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withAuthHeaders(t, { "Content-Type": "application/json" }),
         body: JSON.stringify({
-          walletAddress: address,
           category,
           payload: payloadObj,
         }),
       });
       const data = await res.json();
       if (data.cid) {
+        toast.push({
+          kind: "success",
+          title: "Stored securely",
+          message: data?.summary?.headline || `CID: ${String(data.cid).slice(0, 24)}...`,
+        });
         await refreshVault();
         setFileName(null);
+      } else {
+        toast.push({ kind: "error", title: "Upload failed", message: data?.error || "No CID returned" });
       }
     } catch (e) {
       console.error(e);
+      toast.push({ kind: "error", title: "Upload failed", message: "Check API is running and you are signed in." });
     } finally {
       setLoading(false);
     }
@@ -130,24 +148,34 @@ export default function VaultPage() {
 
   async function handleUploadMedia() {
     if (!address || !mediaFile) return;
+    const t = token ?? (await ensureAuth());
+    if (!t) return;
     setLoading(true);
     try {
       const form = new FormData();
-      form.append("walletAddress", address);
       form.append("category", category);
       form.append("file", mediaFile);
 
       const res = await fetch(`${API}/api/data/upload-media`, {
         method: "POST",
+        headers: withAuthHeaders(t),
         body: form,
       });
       const data = await res.json();
       if (data.cid) {
+        toast.push({
+          kind: "success",
+          title: "Media stored",
+          message: `CID: ${String(data.cid).slice(0, 24)}...`,
+        });
         setMediaFile(null);
         await refreshVault();
+      } else {
+        toast.push({ kind: "error", title: "Upload failed", message: data?.error || "No CID returned" });
       }
     } catch (e) {
       console.error(e);
+      toast.push({ kind: "error", title: "Upload failed", message: "Check API is running and you are signed in." });
     } finally {
       setLoading(false);
     }
@@ -183,6 +211,11 @@ export default function VaultPage() {
         <p className="text-slate-600 mb-8">
           Data is encrypted and stored in a decentralized way. AI will anonymize it before any company sees it.
         </p>
+        {(authenticating || authError) && (
+          <div className="mb-6 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+            {authenticating ? "Signing you in to the API…" : `API auth error: ${authError}`}
+          </div>
+        )}
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 mb-8 shadow-sm hover-lift transition-shadow">
           <h2 className="font-semibold mb-4 flex items-center gap-2 text-slate-800">

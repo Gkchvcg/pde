@@ -1,7 +1,10 @@
 import { Router } from "express";
 import multer from "multer";
+import { requireAuth } from "../middleware/auth.js";
 import { storeEncrypted, storeMedia, getByCid } from "../services/storage.js";
 import { anonymize } from "../services/anonymize.js";
+import { privacyReport, summarizeInsight } from "../services/ai.js";
+import { canViewCid } from "../services/chain.js";
 
 const router = Router();
 const upload = multer({
@@ -9,25 +12,29 @@ const upload = multer({
   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
 });
 
-router.post("/upload", async (req, res) => {
+router.post("/upload", requireAuth, async (req, res) => {
   try {
-    const { walletAddress, category, payload } = req.body;
+    const { category, payload } = req.body;
+    const walletAddress = req.user?.sub;
     if (!walletAddress || !category || !payload) {
-      return res.status(400).json({ error: "walletAddress, category, payload required" });
+      return res.status(400).json({ error: "category, payload required" });
     }
+    const report = privacyReport(category, payload);
     const anonymized = await anonymize(category, payload);
     const cid = await storeEncrypted(walletAddress, category, anonymized);
-    res.json({ cid, category });
+    const summary = summarizeInsight(category, anonymized);
+    res.json({ cid, category, summary, privacy: report.pii });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-router.post("/upload-media", upload.single("file"), async (req, res) => {
+router.post("/upload-media", requireAuth, upload.single("file"), async (req, res) => {
   try {
-    const { walletAddress, category } = req.body;
+    const { category } = req.body;
+    const walletAddress = req.user?.sub;
     if (!walletAddress || !category) {
-      return res.status(400).json({ error: "walletAddress, category required" });
+      return res.status(400).json({ error: "category required" });
     }
     if (!req.file) {
       return res.status(400).json({ error: "file required" });
@@ -49,11 +56,20 @@ router.post("/upload-media", upload.single("file"), async (req, res) => {
   }
 });
 
-router.get("/media/:cid", async (req, res) => {
+router.get("/media/:cid", requireAuth, async (req, res) => {
   try {
+    const requesterAddress = req.user?.sub;
+    const requestId = req.query.requestId;
     const record = await getByCid(req.params.cid);
     if (!record) return res.status(404).json({ error: "Not found" });
     if (!record.data || record.data.kind !== "media") return res.status(400).json({ error: "CID is not media" });
+
+    // Owner can view their own media without a requestId.
+    if (record.owner !== requesterAddress?.toLowerCase()) {
+      const ok = await canViewCid({ requesterAddress, requestId, cid: req.params.cid });
+      if (!ok.ok) return res.status(403).json({ error: "Forbidden", reason: ok.reason });
+    }
+
     res.json({
       cid: req.params.cid,
       mime: record.data.mime,
@@ -66,8 +82,11 @@ router.get("/media/:cid", async (req, res) => {
   }
 });
 
-router.get("/vault/:address", async (req, res) => {
+router.get("/vault/:address", requireAuth, async (req, res) => {
   try {
+    if (req.user?.sub?.toLowerCase() !== req.params.address.toLowerCase()) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     const list = await getByCid.listByOwner(req.params.address);
     res.json(list);
   } catch (e) {
