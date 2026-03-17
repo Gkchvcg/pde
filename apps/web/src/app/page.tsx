@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { Wallet, Database, Store, Shield, Sparkles } from "lucide-react";
+import { Wallet, Database, Store, Shield, Sparkles, Building2 } from "lucide-react";
 
 export default function Home() {
   return (
@@ -55,6 +55,13 @@ export default function Home() {
               >
                 <Store className="w-5 h-5" />
                 Marketplace
+              </Link>
+              <Link
+                href="/company"
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 text-white px-6 py-3 font-semibold shadow-lg shadow-slate-900/20 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
+              >
+                <Building2 className="w-5 h-5" />
+                Company Portal
               </Link>
             </div>
           </div>

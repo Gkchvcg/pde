@@ -1,7 +1,10 @@
 {
   "name": "personal-data-economy-wallet",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "dev:web": "npm run dev -w web",
@@ -11,6 +14,18 @@
     "contracts:test": "npm run test -w contracts"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
-  }
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-toolbox": "hh2",
+    "@types/node": "^22.19.15",
+    "concurrently": "^8.2.2",
+    "dotenv": "^17.3.1",
+    "ethers": "^6.12.0",
+    "hardhat": "^2.22.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.8.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.6.1"
+  },
+  "type": "module"
 }

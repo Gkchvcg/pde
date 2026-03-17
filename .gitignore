@@ -5,3 +5,10 @@ node_modules
 dist
 coverage
 .hardhat
+node_modules
+artifacts
+cache
+contracts/artifacts
+contracts/cache
+contracts/typechain-types
+.env

@@ -20,3 +20,25 @@ getByCid.listByOwner = async (address) => {
   const cids = ownerIndex.get(address.toLowerCase()) || [];
   return cids.map((cid) => ({ cid, ...store.get(cid) }));
 };
+
+export async function storeMedia(owner, category, file) {
+  const cid = `ipfs://${Buffer.from(`${owner}-${category}-${Date.now()}-${file.originalname}`).toString("base64url").slice(0, 46)}`;
+  const entry = {
+    owner: owner.toLowerCase(),
+    category,
+    data: {
+      kind: "media",
+      mime: file.mimetype,
+      originalName: file.originalname,
+      size: file.size,
+      base64: file.buffer.toString("base64"),
+    },
+    createdAt: new Date().toISOString(),
+  };
+
+  store.set(cid, entry);
+  const list = ownerIndex.get(owner.toLowerCase()) || [];
+  list.push(cid);
+  ownerIndex.set(owner.toLowerCase(), list);
+  return cid;
+}
