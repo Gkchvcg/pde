@@ -28,7 +28,7 @@ function parseCSV(text: string): { rows: Record<string, string>[] } {
 
 export default function VaultPage() {
   const { address, isConnected } = useAccount();
-  const { token, ensureAuth, authenticating, authError } = useApiAuth();
+  const { token, ensureAuth, logout, authenticating, authError } = useApiAuth();
   const toast = useToast();
   const [category, setCategory] = useState("FITNESS");
   const [payload, setPayload] = useState('{"activityLevel":"moderate","weeklySessions":3}');
@@ -62,6 +62,7 @@ export default function VaultPage() {
       const res = await fetch(`${API}/api/data/vault/${address}`, {
         headers: withAuthHeaders(t),
       });
+      if (res.status === 401) logout();
       const data = await res.json();
       if (Array.isArray(data)) setUploaded(data.reverse());
     } catch (e) {
@@ -126,6 +127,11 @@ export default function VaultPage() {
           payload: payloadObj,
         }),
       });
+      if (res.status === 401) {
+        logout();
+        toast.push({ kind: "error", title: "Session Expired", message: "Please try uploading again to sign in." });
+        return;
+      }
       const data = await res.json();
       if (data.cid) {
         toast.push({
@@ -161,6 +167,11 @@ export default function VaultPage() {
         headers: withAuthHeaders(t),
         body: form,
       });
+      if (res.status === 401) {
+        logout();
+        toast.push({ kind: "error", title: "Session Expired", message: "Please try uploading again to sign in." });
+        return;
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const status = res.status;

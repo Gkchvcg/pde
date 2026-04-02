@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAccount, useSignMessage } from "wagmi";
-import { getApiToken, getNonceMessage, setApiToken, verifySignature } from "@/lib/apiAuth";
+import { getApiToken, getNonceMessage, setApiToken, clearApiToken, verifySignature } from "@/lib/apiAuth";
 
 export function useApiAuth() {
   const { address, isConnected } = useAccount();
@@ -18,6 +18,11 @@ export function useApiAuth() {
     }
     setToken(getApiToken(address));
   }, [address]);
+
+  const logout = () => {
+    if (address) clearApiToken(address);
+    setToken(null);
+  };
 
   const ensureAuth = async () => {
     if (!address || !isConnected) return null;
@@ -44,6 +49,6 @@ export function useApiAuth() {
     }
   };
 
-  return { address, token, ensureAuth, authenticating, authError };
+  return { address, token, ensureAuth, logout, authenticating, authError };
 }
 

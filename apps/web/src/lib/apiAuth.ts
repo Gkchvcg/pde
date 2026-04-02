@@ -32,6 +32,12 @@ export function setApiToken(address: string, token: string) {
   saveTokens(tokens);
 }
 
+export function clearApiToken(address: string) {
+  const tokens = loadTokens();
+  delete tokens[address.toLowerCase()];
+  saveTokens(tokens);
+}
+
 export async function getNonceMessage(address: string) {
   const res = await fetch(`${API}/api/auth/nonce`, {
     method: "POST",

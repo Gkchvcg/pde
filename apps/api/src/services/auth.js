@@ -81,7 +81,13 @@ export function verifyToken(token, secret) {
   if (parts.length !== 2) return null;
   const [body, sig] = parts;
   const expected = signHmac(body, secret);
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+
+  const sigBuf = Buffer.from(sig);
+  const expBuf = Buffer.from(expected);
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+    return null;
+  }
+
   try {
     const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
     if (Date.now() > payload.exp) return null;

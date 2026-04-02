@@ -7,7 +7,7 @@ import "./globals.css";
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans" });
 
 export const metadata: Metadata = {
-  title: "Personal Data Economy Wallet",
+  title: "DataKart",
   description: "Own your data. Get paid when companies use it.",
 };
 
@@ -18,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${dmSans.variable} min-h-screen bg-slate-50 text-slate-800 antialiased font-sans`}>
+      <body className={`${dmSans.variable} min-h-screen bg-slate-950 text-slate-100 antialiased font-sans`}>
         <Providers>
           <ToastProvider>{children}</ToastProvider>
         </Providers>
