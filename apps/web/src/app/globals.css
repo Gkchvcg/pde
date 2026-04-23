@@ -3,20 +3,20 @@
 @tailwind utilities;
 
 :root {
-  --accent: #d946ef; /* fuchsia-500 */
-  --accent-light: #f472b6; /* pink-400 */
-  --surface: rgba(15, 23, 42, 0.7);
-  --border: rgba(255, 255, 255, 0.1);
-  --card: rgba(15, 23, 42, 0.85);
-  --text: #f1f5f9;
-  --text-muted: #94a3b8;
+  --accent: #3b82f6; /* fuchsia-500 */
+  --accent-light: #60a5fa; /* pink-400 */
+  --surface: rgba(255, 255, 255, 0.7);
+  --border: rgba(0, 0, 0, 0.1);
+  --card: rgba(255, 255, 255, 0.6);
+  --text: #0f172a;
+  --text-muted: #475569;
 }
 
 body {
   font-family: "DM Sans", system-ui, sans-serif;
   background:
-    radial-gradient(circle at top left, #3b0764 0, #0f172a 42%, #020617 70%),
-    radial-gradient(circle at bottom right, #450a0a 0, #0f172a 55%, #020617 80%);
+    radial-gradient(circle at top left, #e0f2fe 0, #f8fafc 42%, #ffffff 70%),
+    radial-gradient(circle at bottom right, #dbeafe 0, #f8fafc 55%, #ffffff 80%);
   background-attachment: fixed;
 }
 
@@ -57,6 +57,18 @@ body {
   50% {
     background-position: 100% 50%;
   }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+}
+
+@keyframes float-reverse {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-40px, 30px) scale(0.95); }
+  66% { transform: translate(20px, -40px) scale(1.05); }
 }
 
 @keyframes shimmer {
@@ -103,7 +115,7 @@ body {
 }
 .hover-lift:hover {
   transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 20px 25px -5px rgb(217 70 239 / 0.15), 0 8px 10px -6px rgb(217 70 239 / 0.1);
+  box-shadow: 0 20px 25px -5px rgb(59 130 246 / 0.15), 0 8px 10px -6px rgb(59 130 246 / 0.1);
 }
 
 /* Hero gradient background (animated) */
@@ -117,4 +129,114 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+
+.bg-fixed-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -2;
+  background-attachment: fixed;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.bg-layer-nodes {
+  background-image: url("/bg-nodes.png");
+  opacity: 0.12;
+}
+
+.bg-layer-grid {
+  background-image: url("/bg-grid.png");
+  background-size: 800px 800px;
+  background-repeat: repeat;
+  opacity: 0.08;
+  z-index: -3;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Smooth Scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Glass Premium */
+.glass-premium {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.7);
+  transform: translateY(-10px) scale(1.02);
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.15);
+}
+
+/* Text Reveal Animation */
+.reveal-text {
+  background: linear-gradient(to right, #0f172a 50%, #64748b 50%);
+  background-size: 200% 100%;
+  background-position-x: 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  transition: background-position-x 0.8s ease-in-out;
+}
+
+.reveal-text:hover {
+  background-position-x: 0%;
+}
+
+/* Pulse Glow */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+  50% { box-shadow: 0 0 20px 10px rgba(99, 102, 241, 0); }
+}
+
+.btn-premium {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s ease;
+}
+
+.btn-premium::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150%;
+  height: 150%;
+  background: rgba(255, 255, 255, 0.1);
+  transform: translate(-50%, -50%) rotate(45deg) translateY(100%);
+  transition: all 0.6s ease;
+}
+
+.btn-premium:hover::after {
+  transform: translate(-50%, -50%) rotate(45deg) translateY(-100%);
 }

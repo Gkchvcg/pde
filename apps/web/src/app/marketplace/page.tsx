@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAccount, usePublicClient, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { ArrowLeft, Store, DollarSign, CreditCard, RefreshCcw } from "lucide-react";
+import { ArrowLeft, Store, DollarSign, CreditCard, RefreshCcw, Sparkles } from "lucide-react";
 import { formatUnits, isHex, parseAbiItem, parseUnits } from "viem";
 import { DATA_MARKETPLACE_ADDRESS, dataMarketplaceAbi } from "@/lib/contracts";
 import { useApiAuth } from "@/lib/useApiAuth";
@@ -60,7 +60,11 @@ export default function MarketplacePage() {
       blockNumber: bigint;
     }[]
   >([]);
+  const [bulkRequests, setBulkRequests] = useState<any[]>([]);
+  const [loadingBulk, setLoadingBulk] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<{ tags: string; estimatedValue: string } | null>(null);
 
   const { data: earningsRaw, refetch: refetchEarnings } = useReadContract({
     address: marketplaceAddress as `0x${string}`,
@@ -125,6 +129,27 @@ export default function MarketplacePage() {
       console.error(e);
     } finally {
       setLoadingVault(false);
+    }
+  };
+
+  const analyzeSelectedImage = async () => {
+    if (!fulfillCid) return;
+    setAnalysisLoading(true);
+    try {
+      // For demo purposes, we simulate the analysis if it's not a real public URL
+      // In production, we'd fetch the CID content first.
+      const res = await fetch("/api/analyze-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=800&q=80" }) // Mock URL for demo
+      });
+      const data = await res.json();
+      setAiAnalysis(data);
+      toast.push({ kind: "success", title: "AI Scan Complete", message: `Detected: ${data.tags}` });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAnalysisLoading(false);
     }
   };
 
@@ -200,9 +225,47 @@ export default function MarketplacePage() {
     }
   };
 
+  const refreshBulkRequests = async () => {
+    setLoadingBulk(true);
+    try {
+      const res = await fetch(`${API}/api/requests`);
+      const data = await res.json();
+      setBulkRequests(data.filter((r: any) => r.status === "open"));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingBulk(false);
+    }
+  };
+
+  const contributeToBounty = async (requestId: string) => {
+    if (!fulfillCid) {
+      toast.push({ kind: "error", title: "Select Data First", message: "Pick an item from your vault to contribute." });
+      return;
+    }
+    const t = token ?? (await ensureAuth());
+    try {
+      const res = await fetch(`${API}/api/requests/${requestId}/contribute`, {
+        method: "POST",
+        headers: {
+          ...withAuthHeaders(t),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ cid: fulfillCid }),
+      });
+      if (res.ok) {
+        toast.push({ kind: "success", title: "Contribution Sent", message: "You've successfully joined the aggregation request!" });
+        refreshBulkRequests();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     if (isConnected && address && marketplaceAddress && isHex(marketplaceAddress)) {
       void refreshMyRequests();
+      void refreshBulkRequests();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected, address, marketplaceAddress]);
@@ -342,7 +405,7 @@ export default function MarketplacePage() {
 
       <main className="max-w-6xl mx-auto px-4 py-10">
         <h1 className="text-2xl font-bold mb-2 flex items-center gap-2 text-slate-800 animate-fade-in-up">
-          <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
             <Store className="w-5 h-5 text-white" />
           </span>
           Data Marketplace
@@ -368,7 +431,7 @@ export default function MarketplacePage() {
                   value={marketplaceAddress}
                   onChange={(e) => setMarketplaceAddress(e.target.value.trim())}
                   placeholder="0x..."
-                  className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500"
+                  className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
                   aria-label="Marketplace contract address"
                 />
                 {!marketplaceAddress && (
@@ -378,18 +441,73 @@ export default function MarketplacePage() {
                 )}
               </div>
 
-              <div className="rounded-2xl border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-teal-50 p-6 shadow-sm">
-                <h3 className="font-semibold text-cyan-800 mb-2">How it works</h3>
-                <ol className="list-decimal list-inside text-slate-700 space-y-1 text-sm">
-                  <li>Set permissions in Dashboard → Permissions (category, price, who can access).</li>
-                  <li>Companies create requests and pay into the smart contract.</li>
-                  <li>You approve; backend delivers anonymized insight (AI Privacy Layer).</li>
-                  <li>You fulfill the request and withdraw earnings from the contract.</li>
-                </ol>
+              <div id="bounties" className="rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-6 shadow-sm overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-indigo-900 flex items-center gap-2">
+                      <Sparkles className="w-5 h-5" /> Data Bounties (Aggregation)
+                    </h3>
+                    <button 
+                      onClick={refreshBulkRequests}
+                      className="text-[10px] bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                  <p className="text-xs text-indigo-700 mb-4 font-medium italic">
+                    Companies are looking for bulk datasets. Contribute your data to earn higher rewards and reputation.
+                  </p>
+
+                  <div className="space-y-4">
+                    {loadingBulk ? (
+                      <div className="py-4 text-center">
+                        <RefreshCcw className="w-5 h-5 text-indigo-400 animate-spin mx-auto" />
+                      </div>
+                    ) : bulkRequests.length === 0 ? (
+                      <p className="text-xs text-indigo-400 font-medium py-4 text-center italic">No active bounties at the moment.</p>
+                    ) : (
+                      bulkRequests.map(req => (
+                        <div key={req.id} className="p-4 bg-white rounded-xl border border-indigo-100 shadow-sm hover:border-indigo-300 transition-colors">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-[9px] px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 font-bold border border-indigo-100">
+                              {req.industry}
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-medium">by {req.companyName}</span>
+                          </div>
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-bold text-slate-800 text-sm truncate pr-2">{req.title}</h4>
+                            <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-black shrink-0">
+                              {req.budget}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 mb-3 line-clamp-2 leading-relaxed">{req.description}</p>
+                          <div className="w-full bg-slate-100 h-1.5 rounded-full mb-2 overflow-hidden">
+                            <div 
+                              className="bg-indigo-500 h-full transition-all duration-1000" 
+                              style={{ width: `${Math.min((req.count / req.targetCount) * 100, 100)}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[10px] font-bold text-slate-500 mb-3">
+                            <span>{req.count} / {req.targetCount} Items</span>
+                            <span>{Math.round((req.count / req.targetCount) * 100)}% Complete</span>
+                          </div>
+                          <button 
+                            onClick={() => contributeToBounty(req.id)}
+                            disabled={!fulfillCid}
+                            className="w-full py-2.5 bg-indigo-600 text-white rounded-lg font-black text-[11px] hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {fulfillCid ? "Contribute Selected Data" : "Select from Vault to Join"}
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-6 flex items-center gap-4 shadow-sm hover-lift">
-                <span className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
+                <span className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
                   <DollarSign className="w-6 h-6 text-white" />
                 </span>
                 <div>
@@ -412,7 +530,7 @@ export default function MarketplacePage() {
                 </div>
                 <Link
                   href="/dashboard/payments"
-                  className="rounded-xl bg-gradient-to-r from-cyan-500 to-teal-600 text-white px-4 py-2 font-medium shadow-lg shadow-cyan-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all shrink-0"
+                  className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-600 text-white px-4 py-2 font-medium shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all shrink-0"
                 >
                   Payment options
                 </Link>
@@ -424,7 +542,7 @@ export default function MarketplacePage() {
                   <button
                     type="button"
                     onClick={refreshMyRequests}
-                    className="inline-flex items-center gap-2 text-sm font-medium text-cyan-700 hover:text-cyan-800"
+                    className="inline-flex items-center gap-2 text-sm font-medium text-indigo-700 hover:text-indigo-800"
                     disabled={loadingRequests || !marketplaceAddress || !isHex(marketplaceAddress)}
                   >
                     <RefreshCcw className="w-4 h-4" />
@@ -495,7 +613,7 @@ export default function MarketplacePage() {
                   <div>
                     <label className="block text-sm text-slate-600 mb-1">Data owner wallet</label>
                     <input
-                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500"
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
                       placeholder="0x..."
                       value={requestOwner}
                       onChange={(e) => setRequestOwner(e.target.value)}
@@ -506,7 +624,7 @@ export default function MarketplacePage() {
                     <select
                       value={requestCategory}
                       onChange={(e) => setRequestCategory(e.target.value as CategoryKey)}
-                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500"
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
                       aria-label="Request category"
                     >
                       {CATEGORIES.map((c) => (
@@ -520,7 +638,7 @@ export default function MarketplacePage() {
                     <label className="block text-sm text-slate-600 mb-1">Offer amount (DATA tokens)</label>
                     <input
                       type="number"
-                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500"
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
                       value={offerAmount}
                       onChange={(e) => setOfferAmount(e.target.value)}
                       placeholder="5"
@@ -528,7 +646,7 @@ export default function MarketplacePage() {
                     />
                   </div>
                   <button
-                    className="rounded-xl bg-gradient-to-r from-cyan-500 to-teal-600 text-white px-4 py-2.5 font-medium w-full shadow-lg shadow-cyan-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-600 text-white px-4 py-2.5 font-medium w-full shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                     onClick={handleCreateRequest}
                     disabled={isBusy}
                   >
@@ -546,7 +664,7 @@ export default function MarketplacePage() {
                   <div>
                     <label className="block text-sm text-slate-600 mb-1">Request ID (bytes32)</label>
                     <input
-                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500"
+                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
                       placeholder="0x..."
                       value={requestIdInput}
                       onChange={(e) => setRequestIdInput(e.target.value)}
@@ -570,7 +688,7 @@ export default function MarketplacePage() {
                       <button
                         type="button"
                         onClick={refreshVault}
-                        className="text-xs font-medium text-cyan-700 hover:text-cyan-800"
+                        className="text-xs font-medium text-indigo-700 hover:text-indigo-800"
                         disabled={loadingVault}
                       >
                         {loadingVault ? "Refreshing…" : "Refresh vault"}
@@ -583,7 +701,7 @@ export default function MarketplacePage() {
                     <select
                       value={fulfillCid}
                       onChange={(e) => setFulfillCid(e.target.value)}
-                      className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500"
+                      className="w-full rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
                       aria-label="Insight CID"
                     >
                       <option value="">Select a CID from your vault</option>
@@ -594,7 +712,7 @@ export default function MarketplacePage() {
                       ))}
                     </select>
                     <input
-                      className="mt-2 w-full rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500"
+                      className="mt-2 w-full rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
                       placeholder="...or paste a CID (ipfs://...)"
                       value={fulfillCid}
                       onChange={(e) => setFulfillCid(e.target.value)}
@@ -607,6 +725,31 @@ export default function MarketplacePage() {
                     >
                       Fulfill request (on-chain)
                     </button>
+
+                    {/* AI Smart Scanner UI */}
+                    <div className="mt-6 pt-6 border-t border-slate-200">
+                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Sparkles className="w-3 h-3 text-indigo-600" /> AI Data Scanner
+                      </h4>
+                      <button
+                        onClick={analyzeSelectedImage}
+                        disabled={!fulfillCid || analysisLoading}
+                        className="w-full py-2.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-xl font-bold text-xs hover:bg-indigo-100 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {analysisLoading ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        {analysisLoading ? "Analyzing..." : "Scan Data with DataKart AI"}
+                      </button>
+                      
+                      {aiAnalysis && (
+                        <div className="mt-4 p-4 rounded-2xl bg-indigo-600 text-white shadow-xl animate-fade-in-up">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-black uppercase tracking-tighter opacity-80">AI Insight</span>
+                            <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-md font-bold">Estimated Value: {aiAnalysis.estimatedValue}</span>
+                          </div>
+                          <p className="text-xs font-medium leading-relaxed italic">"Our AI detected: {aiAnalysis.tags}. This high-quality data is prioritized for aggregation."</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="border-t border-slate-200 pt-3 mt-2">

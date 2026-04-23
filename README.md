@@ -1,93 +1,102 @@
-# Personal Data Economy Wallet
+# DataKart: The Global Data Aggregation Engine 🚀
 
-**Your data. Your asset. Your income.**
+**Built by Maroof Husain** | [maroofhusain2006@gmail.com](mailto:maroofhusain2006@gmail.com)
 
-A Web3 wallet that stores, controls, and monetizes your personal data using blockchain + AI + privacy tech. Think UPI, but for your data—you decide who accesses it, for how long, and how much you get paid.
+DataKart is a decentralized, dual-sided marketplace designed to solve the data ownership crisis. It provides a secure bridge between **Companies** requiring large-scale, high-quality datasets for AI training and **Individual Sellers** who want to monetize their digital footprint without sacrificing privacy.
 
-## What It Does
+---
 
-1. **Connect wallet** → Create DID (Decentralized Identity)
-2. **Upload data** → Encrypt & store (IPFS-style); AI anonymizes
-3. **Marketplace** → Companies request access; smart contract checks permissions
-4. **Get paid** → Tokens/crypto to your wallet when insights are delivered
+## 🤖 AI-Powered Ecosystem
 
-## Stack
+DataKart leverages a multi-layered AI architecture to ensure data quality and user trust:
+- **Karty AI Assistant**: A live, Llama-3 powered chatbot on the landing page that guides users through the ecosystem.
+- **AI Smart Scanner**: Integrated into the Marketplace, using Vision AI (BLIP) to automatically tag data and an LLM to provide real-time market value estimates.
+- **DataKart AI Guard**: A dedicated Python/Flask backend for NSFW detection, duplicate prevention (pHash), and metadata extraction.
 
-| Layer      | Tech |
-|-----------|------|
-| Frontend  | Next.js 14, React, RainbowKit, wagmi, Tailwind |
-| Backend   | Node.js, Express |
-| Blockchain| Solidity (Hardhat), Polygon Amoy |
-| Storage   | Mock IPFS (swap for Pinata/web3.storage) |
-| Identity  | DID (did:pde:wallet) |
+---
 
-## Quick Start (Hackathon)
+## 🏗️ How It Works
 
-### 1. Install
+### 1. For Data Sellers (Individual Users)
+*   **Secure Vault**: Upload data to a private, encrypted vault.
+*   **AI Scan**: Automatically identify and value your data points using our AI Scanner.
+*   **Earn Tokens**: Contribute to bounties and receive instant POL/USDC payouts via smart contracts.
 
-```bash
-npm install
-```
+### 2. For Companies (Data Buyers)
+*   **Bulk Bounties**: Post large-scale data aggregation requests.
+*   **Verified Data**: Receive data that has been pre-screened by the AI Guard for safety and relevance.
+*   **Global Reach**: Source high-quality training data from a global network of verified contributors.
 
-### 2. Environment
+---
 
-Copy and fill (see below):
+## 🛠️ Technical Stack
 
-```bash
-cp .env.example .env
-```
+| Layer | Technology |
+| :--- | :--- |
+| **Frontend** | Next.js 14, React, Tailwind CSS |
+| **AI Models** | Meta-Llama-3-8B, Salesforce BLIP, NudeNet |
+| **Web3** | RainbowKit, Wagmi, Solidity, Polygon Amoy |
+| **Backends** | Node.js (Core), Python/Flask (AI Guard) |
 
-- `NEXT_PUBLIC_API_URL` = backend URL (e.g. `http://localhost:4000`)
-- `NEXT_PUBLIC_WALLETCONNECT_ID` = [WalletConnect Cloud](https://cloud.walletconnect.com) project ID (optional for demo)
-- After deploying contracts: `NEXT_PUBLIC_DATA_TOKEN_ADDRESS`, `NEXT_PUBLIC_MARKETPLACE_ADDRESS`
+---
 
-### 3. Run API + Web
+## 📂 Project Structure
 
-```bash
-npm run dev
-```
-
-- Frontend: [http://localhost:3000](http://localhost:3000)
-- API: [http://localhost:4000](http://localhost:4000)
-
-### 4. Deploy Contracts (optional for full flow)
-
-```bash
-cd contracts
-npm install
-npx hardhat node   # terminal 1: local chain
-npx hardhat run scripts/deploy.js --network localhost   # terminal 2
-```
-
-Copy the printed token and marketplace addresses into `.env` in the repo root (and in `apps/web` if you use a separate .env there).
-
-## Project Structure
-
-```
+```text
 ├── apps/
-│   ├── web/          # Next.js app (wallet connect, vault, marketplace UI)
-│   └── api/          # Express API (DID, data upload, anonymization, pricing)
-├── contracts/        # Solidity (DataMarketplace, MockERC20)
-├── package.json      # Workspace root
-└── README.md
+│   ├── web/          # Next.js App (Portals, ChatBot, API Routes)
+│   └── api/          # Node.js API (Marketplace Logic)
+├── nudenetadd/       # Python AI Guard (NSFW, Tagging, Duplicate Check)
+├── contracts/        # Smart Contracts
+└── README.md         # You are here!
 ```
 
-## Features
+---
 
-- **DID identity** – `POST /api/did/create` with `walletAddress`
-- **Data vault** – Upload JSON by category; stored in mock IPFS; AI anonymization
-- **Data pricing engine** – `GET /api/pricing/estimate?category=HEALTH` (e.g. Health $8, Fitness $4)
-- **Smart contracts** – Permissions, requests, escrow, reputation score, withdraw earnings
+## 🚀 Quick Start
 
-## Use Cases
+### 1. Frontend & Core API (Node.js)
+```bash
+# Install dependencies
+npm install
 
-- **Healthcare** – Sell anonymous medical data for research; pharma pays, you earn
-- **Marketing** – Brands pay for real insights (e.g. “users who run 10km weekly”) instead of raw ads
-- **Smart cities** – Share mobility/traffic data; city planners pay for insights
-- **AI training** – Sell voice, image, or behavior data to AI companies
+# Run dev server
+npm run dev
+# Visit http://localhost:3000
+```
 
-## License
+### 2. AI Guard Server (Python)
+The AI Guard handles content moderation and advanced data analysis.
+```bash
+cd nudenetadd
 
-MIT
-# PERSONAL-DATA-ECONOMY-WALLET
-# PERSONAL-DATA-ECONOMY-WALLET
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install requirements
+pip install -r requirements.txt
+
+# Run the server
+python app.py
+# Server runs on http://localhost:5001
+```
+
+### 3. Environment Setup
+Create a `.env` file in `apps/web/` and add:
+```text
+HUGGINGFACE_API_KEY=your_key_here
+```
+
+---
+
+## ⚖️ Legal & Compliance
+DataKart adheres to **GDPR**, **CCPA**, and **India's DPDP Act** by ensuring data minimization and user-controlled permissions.
+
+---
+
+## 📧 Contact
+Built with ❤️ by **Maroof Husain**.
+[GitHub](https://github.com/maroofhusain) | [Email](mailto:maroofhusain2006@gmail.com)
+
+*© 2026 DataKart. Decentralizing the Data Economy.*

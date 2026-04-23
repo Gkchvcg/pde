@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount, usePublicClient, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { formatUnits, isHex, parseAbiItem, parseUnits } from "viem";
-import { ArrowLeft, Building2, ShoppingCart, Shield, RefreshCcw, Eye } from "lucide-react";
+import { ArrowLeft, Building2, ShoppingCart, Shield, RefreshCcw, Eye, Database, Sparkles } from "lucide-react";
 import { dataMarketplaceAbi } from "@/lib/contracts";
 import { ERC20_ABI } from "@/lib/erc20";
 import { useApiAuth } from "@/lib/useApiAuth";
@@ -31,21 +31,6 @@ function shortenHex(value: string, length = 6) {
   return `${value.slice(0, 2 + length)}...${value.slice(-length)}`;
 }
 
-function statusLabel(s: number) {
-  switch (s) {
-    case 0:
-      return "Pending";
-    case 1:
-      return "Approved";
-    case 2:
-      return "Rejected";
-    case 3:
-      return "Fulfilled";
-    default:
-      return `Unknown(${s})`;
-  }
-}
-
 export default function CompanyPage() {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
@@ -56,43 +41,40 @@ export default function CompanyPage() {
   const [tokenAddress, setTokenAddress] = useState<string>("");
 
   const [loadingMarket, setLoadingMarket] = useState(false);
-  const [permissions, setPermissions] = useState<
-    {
-      user: `0x${string}`;
-      category: number;
-      pricePerAccess: bigint;
-      expiresAt: bigint;
-      active: boolean;
-      allowFitnessCompanies: boolean;
-      allowHealthcareCompanies: boolean;
-      allowMarketingCompanies: boolean;
-      allowInsuranceCompanies: boolean;
-      blockNumber: bigint;
-    }[]
-  >([]);
+  const [permissions, setPermissions] = useState<any[]>([]);
 
   const [offerAmount, setOfferAmount] = useState("5");
   const [selectedPermissionKey, setSelectedPermissionKey] = useState<string>("");
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const [myRequests, setMyRequests] = useState<
-    {
-      requestId: `0x${string}`;
-      requester: `0x${string}`;
-      dataOwner: `0x${string}`;
-      category: number;
-      offeredAmount: bigint;
-      status: number;
-      insightCid: string;
-      createdAt: bigint;
-      blockNumber: bigint;
-    }[]
-  >([]);
+  const [myRequests, setMyRequests] = useState<any[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
-  const [viewer, setViewer] = useState<{ cid: string; kind: "insight" | "media"; mime?: string; content?: any } | null>(
-    null
-  );
+  const [viewer, setViewer] = useState<any>(null);
   const [loadingViewer, setLoadingViewer] = useState(false);
+  const [bulkRequests, setBulkRequests] = useState<any[]>([]);
+  const [loadingBulk, setLoadingBulk] = useState(false);
+  const [showBulkForm, setShowBulkForm] = useState(false);
+  
+  const [bulkForm, setBulkForm] = useState({
+    title: "",
+    category: "HEALTH",
+    targetCount: "1000",
+    budget: "1000 POL",
+    description: "",
+    companyName: "",
+    industry: "AI Research"
+  });
+
+  const [companyProfile, setCompanyProfile] = useState({
+    name: "DataKart Partner",
+    industry: "Technology",
+    website: "https://datakart.io",
+    bio: "We are building the future of decentralized data aggregation.",
+    regId: "REG-2026-X89",
+    contactEmail: "data@company.com",
+    location: "San Francisco, CA",
+    isSaved: false
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -126,245 +108,98 @@ export default function CompanyPage() {
     query: { enabled: Boolean(address && isHex(tokenAddress) && isHex(marketplaceAddress)) },
   });
 
-  const allowance = useMemo(() => {
-    if (!allowanceRaw) return BigInt(0);
-    return allowanceRaw as bigint;
-  }, [allowanceRaw]);
+  const allowance = useMemo(() => allowanceRaw ? (allowanceRaw as bigint) : BigInt(0), [allowanceRaw]);
 
   const { data: txHash, writeContract, isPending } = useWriteContract();
   const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash: txHash });
   const busy = isPending || isConfirming;
 
   const refreshMarketplace = async () => {
-    if (!publicClient) return;
-    if (!marketplaceAddress || !isHex(marketplaceAddress)) return;
+    if (!publicClient || !isHex(marketplaceAddress)) return;
     setLoadingMarket(true);
     try {
       const latest = await publicClient.getBlockNumber();
       const lookback = BigInt(40000);
       const fromBlock = latest > lookback ? latest - lookback : BigInt(0);
-
-      const permissionCreated = parseAbiItem(
-        "event PermissionCreated(bytes32 indexed permissionId, address indexed user, uint8 category, uint256 price)"
-      );
-
       const logs = await publicClient.getLogs({
         address: marketplaceAddress as `0x${string}`,
-        event: permissionCreated,
-        fromBlock,
-        toBlock: latest,
+        event: parseAbiItem("event PermissionCreated(bytes32 indexed permissionId, address indexed user, uint8 category, uint256 price)"),
+        fromBlock, toBlock: latest,
       });
-
-      // Unique by (user,category) because permissions are one-time in this contract.
-      const seen = new Map<string, { user: `0x${string}`; category: number; blockNumber: bigint }>();
-      for (const l of logs) {
-        const user = l.args.user as `0x${string}`;
-        const category = Number(l.args.category);
-        const key = `${user.toLowerCase()}:${category}`;
-        seen.set(key, { user, category, blockNumber: l.blockNumber ?? BigInt(0) });
-      }
-
-      const entries = Array.from(seen.values());
-      const hydrated = await Promise.all(
-        entries.map(async (e) => {
-          const perm = (await publicClient.readContract({
-            address: marketplaceAddress as `0x${string}`,
-            abi: dataMarketplaceAbi,
-            functionName: "getPermission",
-            args: [e.user, e.category],
-          })) as any;
-          return {
-            user: perm.user as `0x${string}`,
-            category: Number(perm.category),
-            pricePerAccess: perm.pricePerAccess as bigint,
-            expiresAt: perm.expiresAt as bigint,
-            active: Boolean(perm.active),
-            allowFitnessCompanies: Boolean(perm.allowFitnessCompanies),
-            allowHealthcareCompanies: Boolean(perm.allowHealthcareCompanies),
-            allowMarketingCompanies: Boolean(perm.allowMarketingCompanies),
-            allowInsuranceCompanies: Boolean(perm.allowInsuranceCompanies),
-            blockNumber: e.blockNumber,
-          };
-        })
-      );
-
-      const now = BigInt(Math.floor(Date.now() / 1000));
-      setPermissions(
-        hydrated
-          .filter((p) => p.active && p.expiresAt > now)
-          .sort((a, b) => Number(b.blockNumber - a.blockNumber))
-      );
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingMarket(false);
-    }
+      const hydrated = await Promise.all(logs.map(async (l) => {
+        const perm = await publicClient.readContract({
+          address: marketplaceAddress as `0x${string}`, abi: dataMarketplaceAbi,
+          functionName: "getPermission", args: [l.args.user, l.args.category],
+        }) as any;
+        return { ...perm, blockNumber: l.blockNumber };
+      }));
+      setPermissions(hydrated.filter(p => p.active).sort((a,b) => Number(b.blockNumber - a.blockNumber)));
+    } catch (e) { console.error(e); } finally { setLoadingMarket(false); }
   };
 
   const refreshMyRequests = async () => {
-    if (!publicClient) return;
-    if (!address) return;
-    if (!marketplaceAddress || !isHex(marketplaceAddress)) return;
+    if (!publicClient || !address || !isHex(marketplaceAddress)) return;
     setLoadingRequests(true);
     try {
       const latest = await publicClient.getBlockNumber();
-      const lookback = BigInt(40000);
-      const fromBlock = latest > lookback ? latest - lookback : BigInt(0);
-
-      const requestCreated = parseAbiItem(
-        "event RequestCreated(bytes32 indexed requestId, address requester, address dataOwner, uint8 category, uint256 amount)"
-      );
-
+      const fromBlock = latest > BigInt(40000) ? latest - BigInt(40000) : BigInt(0);
       const logs = await publicClient.getLogs({
         address: marketplaceAddress as `0x${string}`,
-        event: requestCreated,
-        fromBlock,
-        toBlock: latest,
+        event: parseAbiItem("event RequestCreated(bytes32 indexed requestId, address requester, address dataOwner, uint8 category, uint256 amount)"),
+        fromBlock, toBlock: latest,
       });
-
-      const mine = logs
-        .map((l) => ({
-          requestId: l.args.requestId as `0x${string}`,
-          requester: l.args.requester as `0x${string}`,
-          dataOwner: l.args.dataOwner as `0x${string}`,
-          category: Number(l.args.category),
-          offeredAmount: l.args.amount as bigint,
-          blockNumber: l.blockNumber ?? BigInt(0),
-        }))
-        .filter((l) => l.requester.toLowerCase() === address.toLowerCase());
-
-      const uniq = new Map<string, (typeof mine)[number]>();
-      for (const r of mine) uniq.set(r.requestId, r);
-      const unique = Array.from(uniq.values()).sort((a, b) => Number(b.blockNumber - a.blockNumber));
-
-      const hydrated = await Promise.all(
-        unique.map(async (r) => {
-          const req = (await publicClient.readContract({
-            address: marketplaceAddress as `0x${string}`,
-            abi: dataMarketplaceAbi,
-            functionName: "getRequest",
-            args: [r.requestId],
-          })) as any;
-          return {
-            ...r,
-            requester: req.requester as `0x${string}`,
-            dataOwner: req.dataOwner as `0x${string}`,
-            category: Number(req.category),
-            offeredAmount: req.offeredAmount as bigint,
-            status: Number(req.status),
-            createdAt: req.createdAt as bigint,
-            insightCid: req.insightCid as string,
-          };
-        })
-      );
-
+      const hydrated = await Promise.all(logs.filter(l => (l.args.requester as string).toLowerCase() === address.toLowerCase()).map(async (l) => {
+        const req = await publicClient.readContract({
+          address: marketplaceAddress as `0x${string}`, abi: dataMarketplaceAbi,
+          functionName: "getRequest", args: [l.args.requestId],
+        }) as any;
+        return { ...req, requestId: l.args.requestId };
+      }));
       setMyRequests(hydrated);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingRequests(false);
-    }
+    } catch (e) { console.error(e); } finally { setLoadingRequests(false); }
   };
 
-  useEffect(() => {
-    if (!isConnected) return;
-    if (!marketplaceAddress || !isHex(marketplaceAddress)) return;
-    void refreshMarketplace();
-    void refreshMyRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, address, marketplaceAddress]);
-
-  const neededAmount = useMemo(() => {
+  const refreshBulkRequests = async () => {
+    setLoadingBulk(true);
     try {
-      return parseUnits(offerAmount || "0", 18);
-    } catch {
-      return BigInt(0);
-    }
-  }, [offerAmount]);
-
-  const ensureAllowance = () => {
-    setLocalError(null);
-    if (!isHex(tokenAddress)) {
-      setLocalError("Set DATA token address first.");
-      return;
-    }
-    if (!isHex(marketplaceAddress)) {
-      setLocalError("Set marketplace contract address first.");
-      return;
-    }
-    // Approve max to avoid repeated approvals in demos
-    writeContract({
-      address: tokenAddress as `0x${string}`,
-      abi: ERC20_ABI,
-      functionName: "approve",
-      args: [marketplaceAddress as `0x${string}`, BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")],
-    });
-    void refetchAllowance();
-    toast.push({ kind: "info", title: "Approval sent", message: "Confirm the token approval in your wallet." });
+      const res = await fetch(`${API}/api/requests`);
+      const data = await res.json();
+      setBulkRequests(data.reverse());
+    } catch (e) { console.error(e); } finally { setLoadingBulk(false); }
   };
 
-  const createRequest = () => {
-    setLocalError(null);
-    if (!selectedPermission) {
-      setLocalError("Select a listing to request.");
-      return;
-    }
-    if (!isHex(marketplaceAddress)) {
-      setLocalError("Set marketplace contract address first.");
-      return;
-    }
-    if (neededAmount < selectedPermission.pricePerAccess) {
-      setLocalError("Offer must be >= the listing price.");
-      return;
-    }
-    writeContract({
-      address: marketplaceAddress as `0x${string}`,
-      abi: dataMarketplaceAbi,
-      functionName: "createRequest",
-      args: [selectedPermission.user, selectedPermission.category, neededAmount],
-    });
-    void refreshMyRequests();
-    toast.push({ kind: "info", title: "Request sent", message: "Your on-chain request is pending confirmation." });
-  };
-
-  const openInsight = async (cid: string) => {
-    setViewer(null);
-    setLoadingViewer(true);
+  const submitBulkRequest = async () => {
+    if (!bulkForm.title || !bulkForm.targetCount) return;
     const t = token ?? (await ensureAuth());
     try {
-      // Try insights endpoint first (structured anonymized data).
-      const res = await fetch(`${API}/api/insights/${encodeURIComponent(cid)}`, {
-        headers: withAuthHeaders(t),
+      const res = await fetch(`${API}/api/requests`, {
+        method: "POST", headers: { ...withAuthHeaders(t), "Content-Type": "application/json" },
+        body: JSON.stringify(bulkForm),
       });
       if (res.ok) {
-        const data = await res.json();
-        setViewer({ cid, kind: "insight", content: data });
-        return;
+        toast.push({ kind: "success", title: "Bounty Posted", message: "Your bulk data request is now live." });
+        setShowBulkForm(false); refreshBulkRequests();
       }
-    } catch {}
-
-    try {
-      // Fallback to media.
-      const res2 = await fetch(`${API}/api/data/media/${encodeURIComponent(cid)}`, {
-        headers: withAuthHeaders(t),
-      });
-      const data2 = await res2.json();
-      if (data2?.base64 && data2?.mime) {
-        setViewer({ cid, kind: "media", mime: data2.mime, content: data2.base64 });
-        return;
-      }
-    } catch {}
-
-    setViewer({ cid, kind: "insight", content: { error: "Unable to load this CID from API." } });
-    setLoadingViewer(false);
-    toast.push({ kind: "error", title: "Unable to load", message: "You can only view fulfilled insights you purchased." });
+    } catch (e) { console.error(e); }
   };
 
   useEffect(() => {
-    if (!loadingViewer) return;
-    const t = setTimeout(() => setLoadingViewer(false), 500);
-    return () => clearTimeout(t);
-  }, [loadingViewer]);
+    if (isConnected && isHex(marketplaceAddress)) {
+      refreshMarketplace(); refreshMyRequests(); refreshBulkRequests();
+    }
+  }, [isConnected, address, marketplaceAddress]);
+
+  const openInsight = async (cid: string) => {
+    setViewer(null); setLoadingViewer(true);
+    const t = token ?? (await ensureAuth());
+    try {
+      const res = await fetch(`${API}/api/insights/${encodeURIComponent(cid)}`, { headers: withAuthHeaders(t) });
+      if (res.ok) { setViewer({ cid, kind: "insight", content: await res.json() }); return; }
+      const res2 = await fetch(`${API}/api/data/media/${encodeURIComponent(cid)}`, { headers: withAuthHeaders(t) });
+      const data2 = await res2.json();
+      if (data2?.base64) { setViewer({ cid, kind: "media", mime: data2.mime, content: data2.base64 }); return; }
+    } catch (e) {} finally { setLoadingViewer(false); }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -378,242 +213,81 @@ export default function CompanyPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-bold mb-2 flex items-center gap-2 text-slate-800 animate-fade-in-up">
-          <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center shadow-lg shadow-slate-900/20">
-            <Building2 className="w-5 h-5 text-white" />
-          </span>
-          Company Portal
-        </h1>
-        <p className="text-slate-600 mb-8">
-          Login with wallet, browse listings, request access, and view fulfilled insights inside the platform (no downloads).
-        </p>
-
-        {!isConnected ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm animate-fade-in-up">
-            <p className="text-slate-600 mb-4">Connect your company wallet to continue.</p>
-            <ConnectButton />
-          </div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 stagger-children">
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h3 className="font-semibold text-slate-800 mb-2">Contracts</h3>
-                <div className="space-y-3">
-                  <div>
-                    <label htmlFor="companyMarketplace" className="block text-sm text-slate-600 mb-1">
-                      Marketplace address
-                    </label>
-                    <input
-                      id="companyMarketplace"
-                      value={marketplaceAddress}
-                      onChange={(e) => setMarketplaceAddress(e.target.value.trim())}
-                      placeholder="0x..."
-                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500"
-                      aria-label="Marketplace address"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="companyToken" className="block text-sm text-slate-600 mb-1">
-                      DATA token address
-                    </label>
-                    <input
-                      id="companyToken"
-                      value={tokenAddress}
-                      onChange={(e) => setTokenAddress(e.target.value.trim())}
-                      placeholder="0x..."
-                      className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500"
-                      aria-label="DATA token address"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={ensureAllowance}
-                      disabled={busy || !isHex(tokenAddress) || !isHex(marketplaceAddress)}
-                      className="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      Approve DATA spending
-                    </button>
-                    <p className="text-xs text-slate-500">
-                      Allowance: <span className="font-medium">{formatUnits(allowance, 18)}</span> DATA
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift">
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <h3 className="font-semibold text-slate-800">Marketplace listings</h3>
-                  <button
-                    type="button"
-                    onClick={refreshMarketplace}
-                    className="inline-flex items-center gap-2 text-sm font-medium text-cyan-700 hover:text-cyan-800"
-                    disabled={loadingMarket || !isHex(marketplaceAddress)}
-                  >
-                    <RefreshCcw className="w-4 h-4" />
-                    {loadingMarket ? "Refreshing…" : "Refresh"}
-                  </button>
-                </div>
-                <p className="text-xs text-slate-500 mb-3">Built from on-chain `PermissionCreated` events + `getPermission`.</p>
-
-                <div className="space-y-2">
-                  {permissions.length === 0 ? (
-                    <p className="text-sm text-slate-600">No active listings found yet.</p>
-                  ) : (
-                    permissions.map((p) => {
-                      const key = `${p.user.toLowerCase()}:${p.category}`;
-                      const selected = key === selectedPermissionKey;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setSelectedPermissionKey(key)}
-                          className={`w-full text-left rounded-xl border px-4 py-3 transition ${
-                            selected ? "border-cyan-300 bg-cyan-50" : "border-slate-200 bg-slate-50 hover:bg-white"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-slate-800 truncate">{shortenHex(p.user)}</p>
-                              <p className="text-xs text-slate-600 mt-0.5">
-                                Category: <span className="font-medium">{CATEGORY_LABEL[p.category] ?? p.category}</span>
-                              </p>
-                              <p className="text-xs text-slate-500 mt-0.5">
-                                Price: <span className="font-medium">{formatUnits(p.pricePerAccess, 18)}</span> DATA
-                              </p>
-                            </div>
-                            <span className="text-xs text-slate-500">Active</span>
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-
-                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                  <h4 className="text-sm font-semibold text-slate-800 mb-2 flex items-center gap-2">
-                    <ShoppingCart className="w-4 h-4" /> Request access
-                  </h4>
-                  <label htmlFor="offerAmount" className="block text-sm text-slate-600 mb-1">
-                    Offer amount (DATA)
-                  </label>
-                  <input
-                    id="offerAmount"
-                    value={offerAmount}
-                    onChange={(e) => setOfferAmount(e.target.value)}
-                    placeholder="5"
-                    className="w-full rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-slate-800 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500"
-                    aria-label="Offer amount"
-                  />
-                  <button
-                    type="button"
-                    onClick={createRequest}
-                    disabled={busy || !selectedPermission || allowance === BigInt(0)}
-                    className="mt-3 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-600 text-white px-4 py-2.5 font-medium w-full shadow-lg shadow-cyan-500/25 hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    Create request (on-chain)
-                  </button>
-                  <p className="text-xs text-slate-500 mt-2">
-                    Note: the smart contract enforces pricing and expiry. It doesn’t grant “download”; fulfilled insights are viewed in-app.
-                  </p>
-                </div>
+        <div className="grid gap-6 md:grid-cols-3 mb-10">
+          <div className="md:col-span-1 space-y-4">
+            <div className="rounded-[2rem] border border-fuchsia-100 bg-white p-6 shadow-sm relative overflow-hidden">
+              <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-fuchsia-600" /> Company Profile
+              </h3>
+              <div className="space-y-3">
+                <input placeholder="Name" className="w-full text-sm p-2 rounded-lg border border-fuchsia-50 bg-fuchsia-50/30" value={companyProfile.name} onChange={e => setCompanyProfile({...companyProfile, name: e.target.value})} />
+                <input placeholder="Website" className="w-full text-sm p-2 rounded-lg border border-fuchsia-50 bg-fuchsia-50/30" value={companyProfile.website} onChange={e => setCompanyProfile({...companyProfile, website: e.target.value})} />
+                <input placeholder="Reg ID" className="w-full text-sm p-2 rounded-lg border border-fuchsia-50 bg-fuchsia-50/30" value={companyProfile.regId} onChange={e => setCompanyProfile({...companyProfile, regId: e.target.value})} />
+                <textarea placeholder="Bio" className="w-full text-sm p-2 rounded-lg border border-fuchsia-50 bg-fuchsia-50/30 h-20" value={companyProfile.bio} onChange={e => setCompanyProfile({...companyProfile, bio: e.target.value})} />
+                <button onClick={() => toast.push({kind:"success", title:"Saved"})} className="w-full py-2 bg-slate-900 text-white rounded-xl font-bold text-xs">Save Profile</button>
               </div>
             </div>
+            <div className="rounded-[2rem] border border-fuchsia-100 bg-gradient-to-br from-fuchsia-600 to-purple-700 p-6 text-white shadow-xl shadow-fuchsia-200">
+              <h4 className="font-bold mb-2 flex items-center gap-2 text-sm"><Sparkles className="w-4 h-4" /> Why verify?</h4>
+              <p className="text-[11px] leading-relaxed opacity-90">Verified companies receive 3x more data contributions.</p>
+            </div>
+          </div>
 
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift">
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <h3 className="font-semibold text-slate-800">Your purchases</h3>
-                  <button
-                    type="button"
-                    onClick={refreshMyRequests}
-                    className="inline-flex items-center gap-2 text-sm font-medium text-cyan-700 hover:text-cyan-800"
-                    disabled={loadingRequests || !isHex(marketplaceAddress)}
-                  >
-                    <RefreshCcw className="w-4 h-4" />
-                    {loadingRequests ? "Refreshing…" : "Refresh"}
-                  </button>
+          <div className="md:col-span-2 space-y-6">
+            <h1 className="text-3xl font-black mb-2 flex items-center gap-3 text-slate-800 animate-fade-in-up">
+              <span className="w-12 h-12 rounded-2xl bg-gradient-to-br from-fuchsia-600 to-purple-700 flex items-center justify-center shadow-xl shadow-fuchsia-200">
+                <Building2 className="w-6 h-6 text-white" />
+              </span>
+              Company Portal
+            </h1>
+            <p className="text-slate-500 font-medium max-w-xl">Manage bounties and access insights.</p>
+
+            {!isConnected ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm"><ConnectButton /></div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h3 className="font-semibold text-slate-800 mb-2 text-sm">Marketplace listings</h3>
+                    <div className="space-y-2">
+                      {permissions.map(p => (
+                        <button key={p.user} onClick={() => setSelectedPermissionKey(`${p.user.toLowerCase()}:${p.category}`)} className="w-full text-left p-3 rounded-xl border border-slate-100 bg-slate-50 text-xs truncate">
+                          {shortenHex(p.user)} - {CATEGORY_LABEL[p.category]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
-                {myRequests.length === 0 ? (
-                  <p className="text-sm text-slate-600">No requests created by this wallet yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {myRequests.map((r) => (
-                      <div key={r.requestId} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-slate-800 truncate">{shortenHex(r.requestId)}</p>
-                            <p className="text-xs text-slate-600 mt-0.5">
-                              Owner <span className="font-medium">{shortenHex(r.dataOwner)}</span> • {CATEGORY_LABEL[r.category] ?? r.category}
-                            </p>
-                            <p className="text-xs text-slate-500 mt-0.5">
-                              Offered <span className="font-medium">{formatUnits(r.offeredAmount, 18)}</span> DATA • Status{" "}
-                              <span className="font-medium">{statusLabel(r.status)}</span>
-                            </p>
-                          </div>
-                          <div className="shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => r.insightCid && openInsight(r.insightCid)}
-                              disabled={!r.insightCid}
-                              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 text-white px-3 py-1.5 text-xs font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                            >
-                              <Eye className="w-4 h-4" />
-                              View
-                            </button>
+                <div className="space-y-4">
+                  <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-6 shadow-sm relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-bold text-indigo-900 flex items-center gap-2 text-sm"><Database className="w-4 h-4" /> Bulk Bounties</h3>
+                      <button onClick={() => setShowBulkForm(!showBulkForm)} className="text-[10px] bg-indigo-600 text-white px-3 py-1.5 rounded-lg">{showBulkForm ? "Cancel" : "+ New"}</button>
+                    </div>
+                    {showBulkForm && (
+                      <div className="mb-6 p-4 bg-white rounded-xl border border-indigo-100 space-y-3">
+                        <input placeholder="Title" className="w-full text-xs p-2 rounded-lg border border-indigo-50" value={bulkForm.title} onChange={e => setBulkForm({...bulkForm, title: e.target.value})} />
+                        <button onClick={submitBulkRequest} className="w-full py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold">Post Bounty</button>
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      {bulkRequests.map(req => (
+                        <div key={req.id} className="p-3 bg-white rounded-xl border border-indigo-100">
+                          <h4 className="font-bold text-slate-800 text-xs truncate">{req.title}</h4>
+                          <div className="w-full bg-slate-100 h-1 rounded-full mt-2 overflow-hidden">
+                            <div className="bg-indigo-500 h-full" style={{ width: `${(req.count/req.targetCount)*100}%` }} />
                           </div>
                         </div>
-                        {r.insightCid ? <p className="text-xs text-slate-500 mt-2 break-all">CID: {r.insightCid}</p> : null}
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover-lift">
-                <h3 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-cyan-700" /> Insight Viewer (in-platform)
-                </h3>
-                <p className="text-xs text-slate-500 mb-3">
-                  We intentionally don’t provide a download link. This is a UI view of the fulfilled output (hackathon-grade security).
-                </p>
-
-                {loadingViewer ? (
-                  <p className="text-sm text-slate-600">Loading insight…</p>
-                ) : !viewer ? (
-                  <p className="text-sm text-slate-600">Select a fulfilled request and click “View”.</p>
-                ) : viewer.kind === "media" && viewer.mime && viewer.content ? (
-                  viewer.mime.startsWith("image/") ? (
-                    <img
-                      src={`data:${viewer.mime};base64,${viewer.content}`}
-                      alt="Insight media"
-                      className="w-full max-h-96 object-contain rounded-xl border border-slate-100 bg-slate-50"
-                      draggable={false}
-                    />
-                  ) : (
-                    <video
-                      src={`data:${viewer.mime};base64,${viewer.content}`}
-                      controls
-                      className="w-full max-h-96 rounded-xl border border-slate-100 bg-slate-50"
-                      controlsList="nodownload"
-                    />
-                  )
-                ) : (
-                  <pre className="whitespace-pre-wrap text-xs bg-slate-50 border border-slate-200 rounded-xl p-4 overflow-auto max-h-96">
-                    {JSON.stringify(viewer.content, null, 2)}
-                  </pre>
-                )}
-              </div>
-
-              {localError && (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{localError}</p>
-              )}
-            </div>
+            )}
           </div>
-        )}
+        </div>
       </main>
     </div>
   );
 }
-

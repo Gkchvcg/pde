@@ -26,6 +26,9 @@ router.post("/upload", requireAuth, async (req, res) => {
     const summary = summarizeInsight(category, anonymized);
     res.json({ cid, category, summary, privacy: report.pii });
   } catch (e) {
+    if (e.code === "DUPLICATE_DATA") {
+      return res.status(409).json({ error: "Duplicate data rejected" });
+    }
     res.status(500).json({ error: e.message });
   }
 });

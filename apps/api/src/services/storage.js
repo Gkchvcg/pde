@@ -1,10 +1,24 @@
+import crypto from "crypto";
+
 // Mock IPFS/Filecoin storage for hackathon. Replace with actual IPFS (Pinata, web3.storage) for production.
 const store = new Map(); // cid -> { owner, category, data, createdAt }
 const ownerIndex = new Map(); // owner -> [cid, ...]
+const dataHashIndex = new Set(); // hash -> true
 
 export async function storeEncrypted(owner, category, data) {
+  const dataString = typeof data === 'string' ? data : JSON.stringify(data);
+  const hash = crypto.createHash('sha256').update(dataString).digest('hex');
+
+  if (dataHashIndex.has(hash)) {
+    const error = new Error("Duplicate data detected");
+    error.code = "DUPLICATE_DATA";
+    throw error;
+  }
+  
+  dataHashIndex.add(hash);
+
   const cid = `ipfs://${Buffer.from(`${owner}-${category}-${Date.now()}`).toString("base64url").slice(0, 46)}`;
-  const entry = { owner: owner.toLowerCase(), category, data, createdAt: new Date().toISOString() };
+  const entry = { owner: owner.toLowerCase(), category, data, hash, createdAt: new Date().toISOString() };
   store.set(cid, entry);
   const list = ownerIndex.get(owner.toLowerCase()) || [];
   list.push(cid);

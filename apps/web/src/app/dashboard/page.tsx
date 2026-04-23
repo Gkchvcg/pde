@@ -27,6 +27,7 @@ export default function DashboardPage() {
   const cards = [
     { href: "/dashboard/vault", icon: Database, title: "Data Vault", desc: "Upload and manage your data gracefully", color: "from-fuchsia-400 to-fuchsia-600", shadow: "shadow-fuchsia-500/30" },
     { href: "/marketplace", icon: Store, title: "Marketplace", desc: "Permissions & requests", color: "from-amber-400 to-amber-500", shadow: "shadow-amber-500/30" },
+    { href: "/marketplace#bounties", icon: Sparkles, title: "Data Bounties", desc: "Earn big by joining bulk requests", color: "from-indigo-400 to-indigo-600", shadow: "shadow-indigo-500/30" },
     { href: "/dashboard/permissions", icon: Settings, title: "Permissions", desc: "Who can access what", color: "from-emerald-400 to-emerald-500", shadow: "shadow-emerald-500/30" },
     { href: "/dashboard/payments", icon: CreditCard, title: "Payments", desc: "Watch the tokens flow", color: "from-sky-400 to-blue-500", shadow: "shadow-blue-500/30" },
   ];

@@ -6,6 +6,7 @@ import { didRouter } from "./routes/did.js";
 import { dataRouter } from "./routes/data.js";
 import { insightsRouter } from "./routes/insights.js";
 import { pricingRouter } from "./routes/pricing.js";
+import { requestsRouter } from "./routes/requests.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -18,6 +19,7 @@ app.use("/api/did", didRouter);
 app.use("/api/data", dataRouter);
 app.use("/api/insights", insightsRouter);
 app.use("/api/pricing", pricingRouter);
+app.use("/api/requests", requestsRouter);
 
 app.get("/api/health", (_, res) => res.json({ ok: true }));
 
