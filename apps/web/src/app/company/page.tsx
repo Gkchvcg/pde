@@ -129,7 +129,7 @@ export default function CompanyPage() {
       const hydrated = await Promise.all(logs.map(async (l) => {
         const perm = await publicClient.readContract({
           address: marketplaceAddress as `0x${string}`, abi: dataMarketplaceAbi,
-          functionName: "getPermission", args: [l.args.user, l.args.category],
+          functionName: "getPermission", args: [l.args.user as `0x${string}`, l.args.category as number],
         }) as any;
         return { ...perm, blockNumber: l.blockNumber };
       }));
@@ -151,7 +151,7 @@ export default function CompanyPage() {
       const hydrated = await Promise.all(logs.filter(l => (l.args.requester as string).toLowerCase() === address.toLowerCase()).map(async (l) => {
         const req = await publicClient.readContract({
           address: marketplaceAddress as `0x${string}`, abi: dataMarketplaceAbi,
-          functionName: "getRequest", args: [l.args.requestId],
+          functionName: "getRequest", args: [l.args.requestId as `0x${string}`],
         }) as any;
         return { ...req, requestId: l.args.requestId };
       }));
